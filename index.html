@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PHC AI — Interactive Prototype</title>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* --- Basic layout & styling --- */
+    :root {
+      --bg: #f5f7fb;
+      --card: #fff;
+      --accent: #0f1724;
+      --muted: #6b7280;
+      --primary: #0b6ef6;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:#111}
+    .container{max-width:1100px;margin:24px auto;padding:16px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    header h1{margin:0;font-size:1.1rem}
+    .card{background:var(--card);border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(15,23,36,0.06)}
+    .flex{display:flex;gap:12px}
+    .col{display:flex;flex-direction:column;gap:12px}
+    .two-col{display:grid;grid-template-columns:1fr 380px;gap:12px}
+    button{cursor:pointer;border:none;padding:8px 10px;border-radius:8px}
+    .btn-primary{background:var(--accent);color:white}
+    .btn-ghost{background:transparent;border:1px solid #e5e7eb}
+    input,select,textarea{padding:8px;border-radius:8px;border:1px solid #e6e7eb;width:100%;font-size:0.95rem}
+    small{color:var(--muted)}
+    .muted{color:var(--muted)}
+    /* login */
+    .role-select{display:flex;gap:12px}
+    .role-btn{padding:10px 16px;border-radius:10px;background:white;border:1px solid #e6e7eb}
+    .role-btn.active{background:var(--primary);color:white}
+    /* visuals thumbnails */
+    .thumbs{display:flex;gap:8px;flex-wrap:wrap}
+    .thumb{width:120px;height:90px;padding:6px;border-radius:8px;background:#fbfdff;border:1px solid #eef2ff;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+    .thumb small{font-size:0.78rem}
+    .notification{background:#fff9db;border:1px solid #f5e1a6;padding:8px;border-radius:8px}
+    /* responsive */
+    @media (max-width:880px){
+      .two-col{grid-template-columns:1fr; }
+      .thumb{width:48%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PHC AI — Interactive Prototype</h1>
+      <div class="muted">Prototype (HTML + JS) — save as <code>index.html</code></div>
+    </header>
+
+    <!-- LOGIN / ROLE PICKER -->
+    <section class="card" id="loginCard">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <h3 style="margin:0 0 8px 0">Choose role to begin</h3>
+          <small>Select "Patient" to locate nearest facility and notify admin; select "Administrator" to view dashboard and prompts.</small>
+        </div>
+        <div class="role-select" id="roleButtons">
+          <button class="role-btn" data-role="patient">Patient</button>
+          <button class="role-btn" data-role="admin">Administrator</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN APP AREA (hidden until role selected) -->
+    <div id="appArea" style="margin-top:12px;display:none">
+
+      <!-- PATIENT PANEL -->
+      <div id="patientPanel" style="display:none" class="col">
+        <div class="card">
+          <h3 style="margin-top:0">Patient — Find nearest facility</h3>
+          <small class="muted">Use browser geolocation or enter coordinates manually</small>
+
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn-primary" id="useGeo">Use my location</button>
+            <button class="btn-ghost" id="manualCoordsBtn">Enter coords</button>
+          </div>
+
+          <div id="manualCoords" style="display:none;margin-top:8px;">
+            <label>Latitude</label>
+            <input id="lat" placeholder="e.g. 9.0765" />
+            <label>Longitude</label>
+            <input id="lng" placeholder="e.g. 7.3986" />
+            <div style="height:6px"></div>
+            <button class="btn-primary" id="findManual">Find nearest</button>
+          </div>
+
+          <div id="patientResult" style="margin-top:12px"></div>
+
+          <div id="prefillForm" style="display:none;margin-top:12px">
+            <label>Short pre-diagnosis / reason for visit</label>
+            <textarea id="prediagnosis" placeholder="e.g. fever, vomiting..." rows="3"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button id="confirmVisit" class="btn-primary">Notify facility (send)</button>
+              <button id="cancelVisit" class="btn-ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN + DASHBOARD -->
+      <div id="adminPanel" style="display:none" class="two-col">
+        <!-- LEFT: Dashboard content -->
+        <div class="col">
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <h3 style="margin:0">Welcome Dashboard</h3>
+                <small class="muted">Type a prompt to update visuals (e.g. "malaria this season, top facilities")</small>
+              </div>
+
+              <div style="display:flex;gap:8px;align-items:center">
+                <input id="promptInput" placeholder="Type prompt and press Enter" style="width:320px"/>
+                <button id="promptBtn" class="btn-primary">Run</button>
+              </div>
+            </div>
+
+            <div style="margin-top:12px">
+              <div style="display:flex;gap:12px;margin-bottom:8px">
+                <div class="card" style="padding:10px">
+                  <small>Patients today</small>
+                  <div id="patientsToday" style="font-weight:700;font-size:1.2rem">--</div>
+                </div>
+                <div class="card" style="padding:10px">
+                  <small>Stock-out alerts</small>
+                  <div id="stockAlerts" style="font-weight:700;font-size:1.2rem">--</div>
+                </div>
+                <div class="card" style="padding:10px">
+                  <small>Active PHCs</small>
+                  <div id="activePhcs" style="font-weight:700;font-size:1.2rem">--</div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:8px">
+                <h4 style="margin:0">Main Visualization</h4>
+                <canvas id="mainChart" style="max-height:320px"></canvas>
+              </div>
+
+              <div style="margin-top:8px" class="card">
+                <h4 style="margin:0 0 8px 0">Related Visuals (pick one)</h4>
+                <div class="thumbs" id="visualThumbs">
+                  <!-- thumbnails generated here -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="predList" class="card" style="margin-top:12px">
+            <h4 style="margin:0 0 8px 0">Incoming Patient Notifications</h4>
+            <div id="notificationsList"><small class="muted">No notifications yet</small></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Admin quick area -->
+        <aside class="col">
+          <div class="card">
+            <h4 style="margin:0">Quick Actions</h4>
+            <div style="margin-top:8px">
+              <button id="clearNotifications" class="btn-ghost" style="width:100%">Clear notifications</button>
+              <div style="height:8px"></div>
+              <button id="loadMockData" class="btn-primary" style="width:100%">Load mock data</button>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:12px">
+            <h4 style="margin:0">Notes</h4>
+            <small class="muted">Quick admin notes</small>
+            <textarea id="adminNotes" rows="6" style="margin-top:8px"></textarea>
+          </div>
+
+          <div class="card" style="margin-top:12px">
+            <h4 style="margin:0">Status</h4>
+            <small id="statusMsg" class="muted">Idle</small>
+          </div>
+        </aside>
+      </div>
+
+    </div> <!-- end app area -->
+
+    <div style="height:18px"></div>
+    <small class="muted">Notes: This is a front-end prototype with mock data. Replace mock functions with Fetch calls to connect to your backend AI/model.</small>
+  </div>
+
+  <script>
+  /**************************************************************************
+   * PHC AI Prototype — Single file
+   * Save as index.html and open in browser.
+   *
+   * How it works (high-level):
+   * - Role selection (patient/admin) toggles UI
+   * - Patient: uses geolocation or manual coords to find nearest facility (from a mock list).
+   *   On selection + prediagnosis, a notification is saved to localStorage.
+   * - Admin: prompt input -> a mock "AI" maps prompt keywords to 5 "related visuals".
+   *   Thumbnails show quick previews; clicking a thumbnail updates the main Chart.js chart.
+   *
+   * Replace the mock functions:
+   * - connect sendNotificationToBackend(notification) with fetch('/api/notify', {...})
+   * - connect generateVisualsFromPrompt(prompt) to call your AI model endpoint for visualization suggestions.
+   **************************************************************************/
+
+  // ---------- Mock facility data (replace with real DB/API) ----------
+  const mockFacilities = [
+    { id: 'PHC001', name: 'Lagos Central PHC', lat: 6.5244, lng: 3.3792 },
+    { id: 'PHC002', name: 'Kano West PHC', lat: 11.999, lng: 8.5167 },
+    { id: 'PHC003', name: 'Abuja North PHC', lat: 9.0578, lng: 7.4951 },
+    { id: 'PHC004', name: 'Ibadan East PHC', lat: 7.3775, lng: 3.9470 },
+    { id: 'PHC005', name: 'Port Harcourt PHC', lat: 4.8156, lng: 7.0498 }
+  ];
+
+  // ---------- Utility: Haversine distance ----------
+  function toRad(v){return v*Math.PI/180;}
+  function distanceKm(lat1, lon1, lat2, lon2){
+    const R = 6371; // km
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a = Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+    const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R*c;
+  }
+
+  // ---------- Role selection ----------
+  const roleBtns = document.querySelectorAll('[data-role]');
+  const loginCard = document.getElementById('loginCard');
+  const appArea = document.getElementById('appArea');
+  const patientPanel = document.getElementById('patientPanel');
+  const adminPanel = document.getElementById('adminPanel');
+
+  roleBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=> {
+      roleBtns.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const role = btn.getAttribute('data-role');
+      loginCard.style.display = 'none';
+      appArea.style.display = 'block';
+      if(role === 'patient'){
+        patientPanel.style.display='block';
+        adminPanel.style.display='none';
+      } else {
+        patientPanel.style.display='none';
+        adminPanel.style.display='grid';
+        loadNotificationsToAdmin();
+      }
+    });
+  });
+
+  // ---------- Patient: geolocation and manual coords ----------
+  const useGeoBtn = document.getElementById('useGeo');
+  const manualBtn = document.getElementById('manualCoordsBtn');
+  const manualCoordsWrapper = document.getElementById('manualCoords');
+  const findManualBtn = document.getElementById('findManual');
+  const patientResult = document.getElementById('patientResult');
+  const prefillForm = document.getElementById('prefillForm');
+  const confirmVisitBtn = document.getElementById('confirmVisit');
+  const cancelVisitBtn = document.getElementById('cancelVisit');
+
+  let selectedFacility = null;
+  let patientLoc = null;
+
+  manualBtn.addEventListener('click', ()=> manualCoordsWrapper.style.display = manualCoordsWrapper.style.display === 'none' ? 'block' : 'none');
+
+  useGeoBtn.addEventListener('click', ()=>{
+    patientResult.innerHTML = 'Locating...';
+    if(!navigator.geolocation){
+      patientResult.innerHTML = '<small class="muted">Geolocation not supported. Enter coords manually.</small>';
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      patientLoc = {lat, lng};
+      findNearestAndShow(lat,lng);
+    }, err=>{
+      patientResult.innerHTML = `<small class="muted">Location denied or unavailable. (${err.message})</small>`;
+    }, {timeout:10000});
+  });
+
+  findManualBtn.addEventListener('click', ()=>{
+    const lat = parseFloat(document.getElementById('lat').value);
+    const lng = parseFloat(document.getElementById('lng').value);
+    if(isNaN(lat) || isNaN(lng)){ patientResult.innerHTML = '<small class="muted">Please enter valid coordinates.</small>'; return; }
+    patientLoc = {lat,lng};
+    findNearestAndShow(lat,lng);
+  });
+
+  function findNearestAndShow(lat,lng){
+    const sorted = mockFacilities.map(f=>{
+      return {...f, d: distanceKm(lat,lng,f.lat,f.lng)};
+    }).sort((a,b)=>a.d-b.d);
+    const nearest = sorted[0];
+    selectedFacility = nearest;
+    patientResult.innerHTML = `
+      <div>
+        <strong>Nearest facility:</strong> ${nearest.name} <br>
+        <small class="muted">Distance: ${nearest.d.toFixed(2)} km</small>
+        <div style="height:10px"></div>
+        <button id="chooseFacility" class="btn-primary">Choose this facility</button>
+      </div>
+    `;
+    document.getElementById('chooseFacility').addEventListener('click', ()=>{
+      prefillForm.style.display='block';
+    });
+  }
+
+  cancelVisitBtn.addEventListener('click', ()=> {
+    prefillForm.style.display='none';
+    patientResult.innerHTML = '';
+    selectedFacility = null;
+  });
+
+  confirmVisitBtn.addEventListener('click', ()=>{
+    const text = document.getElementById('prediagnosis').value.trim();
+    if(!selectedFacility){ alert('No facility selected'); return; }
+    const notification = {
+      id: 'notif_'+Date.now(),
+      facility: selectedFacility.name,
+      facilityId: selectedFacility.id,
+      patientLocation: patientLoc,
+      prediagnosis: text || 'Not provided',
+      timestamp: new Date().toISOString()
+    };
+    // Save to localStorage (simulates sending to backend)
+    pushNotification(notification);
+    // Optionally: send to backend via fetch() here
+    // sendNotificationToBackend(notification);
+    prefillForm.style.display='none';
+    patientResult.innerHTML = '<div class="notification">Request sent to facility. Admin will be notified.</div>';
+    document.getElementById('prediagnosis').value = '';
+  });
+
+  // ---------- Notifications (localStorage) ----------
+  const NOTIF_KEY = 'phc_prototype_notifications';
+  function pushNotification(n){
+    const arr = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+    arr.unshift(n);
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(arr));
+    // Inform admin UI if present
+    loadNotificationsToAdmin();
+  }
+  function loadNotificationsToAdmin(){
+    const list = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
+    const el = document.getElementById('notificationsList');
+    if(!el) return;
+    if(list.length === 0) { el.innerHTML = '<small class="muted">No notifications yet</small>'; return; }
+    el.innerHTML = '';
+    list.forEach(n=>{
+      const wrapper = document.createElement('div');
+      wrapper.style.padding = '8px 0';
+      wrapper.style.borderBottom = '1px solid #f3f4f6';
+      wrapper.innerHTML = `<strong>${n.facility}</strong> — ${n.prediagnosis}<br><small class="muted">${new Date(n.timestamp).toLocaleString()}</small>`;
+      el.appendChild(wrapper);
+    });
+    // Update small dashboard counts
+    document.getElementById('patientsToday').innerText = list.length*2 + 100; // mock computation
+    document.getElementById('stockAlerts').innerText = Math.min(9, Math.floor(list.length/1) + 2);
+    document.getElementById('activePhcs').innerText = mockFacilities.length;
+  }
+
+  document.getElementById('clearNotifications').addEventListener('click', ()=>{
+    if(!confirm('Clear all notifications?')) return;
+    localStorage.removeItem(NOTIF_KEY);
+    loadNotificationsToAdmin();
+  });
+
+  // ---------- Admin: prompt -> generate 5 related visuals (mock AI) ----------
+  const promptInput = document.getElementById('promptInput');
+  const promptBtn = document.getElementById('promptBtn');
+  const thumbsContainer = document.getElementById('visualThumbs');
+  const statusMsg = document.getElementById('statusMsg');
+
+  promptBtn.addEventListener('click', ()=> runPrompt(promptInput.value.trim()));
+  promptInput.addEventListener('keydown', (e)=> { if(e.key === 'Enter') runPrompt(promptInput.value.trim()); });
+
+  // mainChart setup
+  const mainCtx = document.getElementById('mainChart').getContext('2d');
+  let mainChart = new Chart(mainCtx, {
+    type: 'bar',
+    data: { labels: ['A','B','C','D'], datasets:[{label:'Value',data:[10,20,30,40],backgroundColor: '#0f1724'}] },
+    options: { responsive:true, maintainAspectRatio:false, scales:{y:{beginAtZero:true}} }
+  });
+
+  // When clicking a thumbnail, update main chart
+  function renderThumbnailList(things){
+    thumbsContainer.innerHTML = '';
+    things.forEach((t, idx)=>{
+      const d = document.createElement('div');
+      d.className = 'thumb';
+      d.innerHTML = `<small style="font-weight:600">${t.title}</small><small style="margin-top:6px" class="muted">${t.subtitle}</small>`;
+      d.addEventListener('click', ()=> {
+        updateMainChart(t);
+        statusMsg.innerText = `Showing: ${t.title}`;
+      });
+      thumbsContainer.appendChild(d);
+    });
+    // auto-select first
+    if(things.length>0) {
+      updateMainChart(things[0]);
+      statusMsg.innerText = `Showing: ${things[0].title}`;
+    }
+  }
+
+  function updateMainChart(t){
+    // t = { type, labels, values, title }
+    const allowedTypes = ['bar','line','pie'];
+    const typ = allowedTypes.includes(t.type) ? t.type : 'bar';
+    mainChart.destroy();
+    mainChart = new Chart(mainCtx, {
+      type: typ,
+      data: {
+        labels: t.labels,
+        datasets: [{
+          label: t.title,
+          data: t.values,
+          backgroundColor: t.background || '#0f1724',
+          borderColor: t.border || '#0f1724',
+          fill: false
+        }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, scales: { y:{ beginAtZero:true}} }
+    });
+  }
+
+  // Mock function that maps prompt -> 5 visuals (you'd replace this by calling your AI)
+  function generateVisualsFromPrompt(prompt){
+    // Simple keyword mapping; you can expand with NLP or call backend AI later
+    prompt = (prompt || '').toLowerCase();
+    const visuals = [];
+
+    // helper to create mock time series
+    function series(name, base){
+      const labels = ['Week -6','Week -5','Week -4','Week -3','Week -2','Last Week','This Week'];
+      const values = labels.map((_,i)=> Math.max(0, Math.round(base + (Math.sin(i/2)*5 + Math.random()*8))));
+      return { title: name, type: 'line', labels, values, subtitle: `Trend for ${name}` };
+    }
+
+    if(prompt.includes('malaria')) {
+      visuals.push(series('Malaria cases (region)', 45));
+      visuals.push(series('Malaria admissions (PHC top5)', 30));
+      visuals.push(series('Malaria drug stock (days left)', 12).type='bar' || {});
+      visuals.push(series('Seasonal malaria index', 20));
+      visuals.push(series('Malaria referrals to hospitals', 8));
+    } else if(prompt.includes('ncd') || prompt.includes('non-communicable') || prompt.includes('hypertension')){
+      visuals.push(series('Hypertension trend', 60));
+      visuals.push(series('Diabetes visits', 18));
+      visuals.push(series('NCD medication stock', 10));
+      visuals.push(series('NCD referrals', 6));
+      visuals.push(series('Age-group NCD burden', 40));
+    } else if(prompt.includes('stock') || prompt.includes('medicine')){
+      visuals.push(series('Drug stock levels (top meds)', 20));
+      visuals.push(series('Stock-out events (30d)', 5));
+      visuals.push(series('Days to resupply (median)', 7));
+      visuals.push(series('Stock per facility (top5)', 11));
+      visuals.push(series('Procurement lead-time', 14));
+    } else if(prompt.includes('facility') || prompt.includes('performance')){
+      visuals.push(series('Facility visits (top5)', 90));
+      visuals.push(series('Avg wait time (mins)', 45));
+      visuals.push(series('Staffed vs unstaffed shifts', 12));
+      visuals.push(series('Referral rate', 8));
+      visuals.push(series('Patient satisfaction index', 70));
+    } else {
+      // default wide set of visuals when prompt unclear
+      visuals.push(series('All-cause consultations', 120));
+      visuals.push(series('Top 5 diseases', 80));
+      visuals.push(series('Weekly visits', 100));
+      visuals.push(series('Stock-out alerts', 6));
+      visuals.push(series('Referral volume', 12));
+    }
+
+    // ensure each entry has fields type, labels, values, title, subtitle
+    return visuals.map(v=>{
+      if(!v.type) v.type = 'line';
+      if(!v.labels) v.labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      if(!v.values) v.values = v.labels.map(()=> Math.round(Math.random()*100));
+      if(!v.title) v.title = 'Visual';
+      if(!v.subtitle) v.subtitle = 'Auto-generated';
+      return v;
+    });
+  }
+
+  async function runPrompt(prompt){
+    if(!prompt){ alert('Please enter a prompt (e.g. "malaria this season").'); return; }
+    statusMsg.innerText = 'Generating visuals...';
+    // simulate API latency
+    await new Promise(r=>setTimeout(r, 500));
+    // Replace with: const visuals = await fetch('/api/visuals',{method:'POST',body:JSON.stringify({prompt})}).then(r=>r.json())
+    const visuals = generateVisualsFromPrompt(prompt);
+    renderThumbnailList(visuals);
+    statusMsg.innerText = 'Visuals generated';
+  }
+
+  // ---------- Mock "Load mock data" button ----------
+  document.getElementById('loadMockData').addEventListener('click', ()=>{
+    // generate some seed notifications for demo
+    const seed = [
+      {id:'n1', facility:'Lagos Central PHC', prediagnosis:'Fever and cough', timestamp: new Date().toISOString()},
+      {id:'n2', facility:'Ibadan East PHC', prediagnosis:'Severe headache', timestamp: new Date().toISOString()}
+    ];
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(seed));
+    loadNotificationsToAdmin();
+    alert('Mock data loaded. Check Incoming Patient Notifications.');
+  });
+
+  // ---------- Demonstration helper: initial default state  ----------
+  // Show default visuals so admin UI isn't empty if used immediately
+  const defaultVisuals = generateVisualsFromPrompt('default');
+  renderThumbnailList(defaultVisuals);
+  loadNotificationsToAdmin();
+
+  // ---------- Hook points to replace with real backend  ----------
+  async function sendNotificationToBackend(notification){
+    // Example:
+    // await fetch('/api/notify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(notification) });
+    // For now we use localStorage as mock
+    pushNotification(notification);
+  }
+
+  // ---------- end script ----------
+  </script>
+</body>
+</html>
